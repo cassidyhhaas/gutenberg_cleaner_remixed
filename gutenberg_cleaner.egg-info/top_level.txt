@@ -1,2 +1,0 @@
-_cleaning_options
-gutenberg_cleaner

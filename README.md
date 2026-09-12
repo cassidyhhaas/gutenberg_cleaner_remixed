@@ -1,48 +1,81 @@
-<div align="center">
-  <img src="/logo.png" alt="Gutenberg books and dataset cleaner Python Package" width="250"/>
-</div>
+# Gutenberg Cleaner
 
-# gutenberg-cleaner
-[![Downloads](https://static.pepy.tech/badge/gutenberg-cleaner)](https://pepy.tech/project/gutenberg-cleaner)
-[![Downloads](https://static.pepy.tech/badge/gutenberg-cleaner/month)](https://pepy.tech/project/gutenberg-cleaner)
+This package cleans Project Gutenberg plain-text books. It uses conservative rules that preserve authored content.
 
-A Python package for cleaning Project Gutenberg books and datasets.
+## Behavior
 
-### Prerequisites
-- nltk package
+The cleaner performs these operations:
 
-### Installing
+1. Decode bytes as UTF-8 without replacement characters.
+2. Normalize Unicode to NFC and use `\n` line endings.
+3. Remove text outside official Gutenberg boundary markers.
+4. Remove clear production noise and duplicate navigation sections.
+5. Preserve headings, notes, tables, verse, dialogue, and descriptive captions.
+
+The cleaner raises `UnresolvedBoundaryError` when a boundary marker is missing. Send these files to an exclusion or quarantine output.
+
+## Install
+
 ```console
-[sudo] pip install gutenberg-cleaner
+pip install .
 ```
 
-## How to use it?
+The package has no runtime dependencies.
 
-The package provides two main functions: "simple_cleaner" and "super_cleaner".
+## Clean text
+
+Use `simple_cleaner` for boundary removal and safe normalization.
+
 ```python
-from gutenberg_cleaner import simple_cleaner, super_cleaner
+from gutenberg_cleaner import simple_cleaner
+
+cleaned_text = simple_cleaner(raw_book)
 ```
-### simple_claner:
-Removes lines that are part of the Project Gutenberg header or footer without altering the main text.
+
+Use `super_cleaner` for conservative content cleaning.
+
 ```python
-simple_cleaner(book: str) -> str
+from gutenberg_cleaner import super_cleaner
+
+cleaned_text = super_cleaner(raw_book)
 ```
-### super_cleaner:
-Performs a thorough cleaning of the book by removing titles, footnotes, images, book information, and other non-content elements. Note that it may happen to remove some valid content too (but rarely).
+
+The old `min_token` and `max_token` arguments remain compatible. The cleaner ignores them because token limits can remove valid book content.
+
+## Get metadata and audit text
+
+Use `clean_book` when the pipeline needs metadata or removed text.
+
 ```python
-super_cleaner(book: str, min_token: int = 5, max_token: int = 600) -> str
+from gutenberg_cleaner import clean_book
+
+result = clean_book(raw_book)
+cleaned_text = result.text
+metadata = result.metadata
+header_audit = result.removed_prefix
+footer_audit = result.removed_suffix
+section_audit = result.removed_sections
 ```
-- `min_token`: The minimum number of tokens required for a non-dialog/non-quote paragraph to be retained. Set to -1 to skip tokenization (faster but less effective cleaning).
-- `max_token`: The maximum number of tokens allowed for any paragraph.
 
+The metadata includes these fields:
 
-Deleted paragraphs will be marked with: `[deleted]`
+- `gutenberg_id`
+- `title`
+- `authors`
+- `language`
+- `source` and `source_url`
+- `rights_statement`
+- `raw_sha256`
+- `cleaner_version`
+- `boundary_status`
+- `production_credits`, when present
 
+## Test
 
-## Author
-
-* **Peyman Mohseni kiasari**
+```console
+python -B -m unittest discover -v
+```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
+This project uses the MIT License. See [LICENSE.md](LICENSE.md).
