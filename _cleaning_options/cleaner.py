@@ -33,7 +33,9 @@ _GUTENBERG_ID = re.compile(
     r"(?:ebook\s*#?\s*|etext\s*#?\s*|/ebooks/)(\d+)",
     re.IGNORECASE,
 )
-_SOURCE_URL = re.compile(r"https?://(?:www\.)?gutenberg\.org/\S+", re.IGNORECASE)
+_SOURCE_URL = re.compile(
+    r"https?://(?:www\.)?gutenberg\.org/\S+", re.IGNORECASE
+)
 
 
 class CleaningResult(NamedTuple):
@@ -61,8 +63,16 @@ def clean_book(book: Union[str, bytes]) -> CleaningResult:
     text, raw_bytes = _decode_book(book)
     normalized = _normalize_text(text)
     boundary = _split_headers(normalized)
-    metadata_prefix = normalized if boundary.boundary_status == "unresolved" else boundary.removed_prefix
-    metadata_suffix = "" if boundary.boundary_status == "unresolved" else boundary.removed_suffix
+    metadata_prefix = (
+        normalized
+        if boundary.boundary_status == "unresolved"
+        else boundary.removed_prefix
+    )
+    metadata_suffix = (
+        ""
+        if boundary.boundary_status == "unresolved"
+        else boundary.removed_suffix
+    )
     metadata = _extract_metadata(
         metadata_prefix,
         metadata_suffix,
@@ -96,7 +106,9 @@ def clean_book(book: Union[str, bytes]) -> CleaningResult:
     body = _normalize_spacing(body)
 
     if removed_sections:
-        metadata["removed_sections"] = [section["type"] for section in removed_sections]
+        metadata["removed_sections"] = [
+            section["type"] for section in removed_sections
+        ]
     production_credits = [
         section["text"].strip()
         for section in removed_sections
@@ -201,14 +213,20 @@ def _extract_metadata(prefix, suffix, raw_sha256, boundary_status):
 
 def _first_field(text, field):
     """Return the first Gutenberg metadata field."""
-    pattern = re.compile(r"^" + re.escape(field) + r":\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+    pattern = re.compile(
+        r"^" + re.escape(field) + r":\s*(.+?)\s*$",
+        re.IGNORECASE | re.MULTILINE,
+    )
     match = pattern.search(text)
     return match.group(1).strip() if match else None
 
 
 def _all_fields(text, field):
     """Return all Gutenberg metadata fields with one name."""
-    pattern = re.compile(r"^" + re.escape(field) + r":\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+    pattern = re.compile(
+        r"^" + re.escape(field) + r":\s*(.+?)\s*$",
+        re.IGNORECASE | re.MULTILINE,
+    )
     return [match.strip() for match in pattern.findall(text)]
 
 
@@ -222,12 +240,17 @@ def _first_match(pattern, text):
 
 def _extract_rights_statement(text):
     """Return the most specific rights line."""
-    field = _first_field(text, "copyright status") or _first_field(text, "rights")
+    field = _first_field(text, "copyright status") or _first_field(
+        text, "rights"
+    )
     if field:
         return field
     for line in text.split("\n"):
         lower = line.lower().strip()
-        if "not protected by u.s. copyright" in lower or "copyrighted project gutenberg" in lower:
+        if (
+            "not protected by u.s. copyright" in lower
+            or "copyrighted project gutenberg" in lower
+        ):
             return line.strip()
     return None
 
@@ -240,7 +263,9 @@ def _remove_production_credits(text):
     consumed_lines = 0
     for part_number in range(0, len(parts), 2):
         block = parts[part_number]
-        separator = parts[part_number + 1] if part_number + 1 < len(parts) else ""
+        separator = (
+            parts[part_number + 1] if part_number + 1 < len(parts) else ""
+        )
         lower = block.strip().lower()
         is_credit = consumed_lines <= 120 and (
             lower.startswith("produced by ")
@@ -263,8 +288,11 @@ def _remove_duplicate_contents(text):
     lines = text.split("\n")
     search_limit = min(len(lines), max(400, len(lines) // 4))
     contents_line = next(
-        (index for index, line in enumerate(lines[:search_limit])
-         if line.strip().lower() in {"contents", "table of contents"}),
+        (
+            index
+            for index, line in enumerate(lines[:search_limit])
+            if line.strip().lower() in {"contents", "table of contents"}
+        ),
         None,
     )
     if contents_line is None:
@@ -294,7 +322,9 @@ def _remove_duplicate_contents(text):
 
     removed_text = "\n".join(lines[contents_line:first_body_line])
     kept = lines[:contents_line] + lines[first_body_line:]
-    return "\n".join(kept), [{"type": "table_of_contents", "text": removed_text}]
+    return "\n".join(kept), [
+        {"type": "table_of_contents", "text": removed_text}
+    ]
 
 
 def _heading_key(line):
@@ -318,20 +348,30 @@ def _remove_terminal_index(text):
     lines = text.split("\n")
     start = max(0, len(lines) * 3 // 4)
     index_line = next(
-        (index for index in range(start, len(lines)) if lines[index].strip().lower() == "index"),
+        (
+            index
+            for index in range(start, len(lines))
+            if lines[index].strip().lower() == "index"
+        ),
         None,
     )
     if index_line is None:
         return text, []
-    entries = [line.strip() for line in lines[index_line + 1:] if line.strip()]
+    entries = [
+        line.strip() for line in lines[index_line + 1 :] if line.strip()
+    ]
     page_entries = [
-        line for line in entries
-        if len(line) < 180 and re.search(r"(?:,|\.{2,}|\s)\s*\d+(?:[-–, ]+\d+)*\.?$", line)
+        line
+        for line in entries
+        if len(line) < 180
+        and re.search(r"(?:,|\.{2,}|\s)\s*\d+(?:[-–, ]+\d+)*\.?$", line)
     ]
     if len(entries) < 5 or len(page_entries) * 2 < len(entries):
         return text, []
     removed_text = "\n".join(lines[index_line:])
-    return "\n".join(lines[:index_line]), [{"type": "index", "text": removed_text}]
+    return "\n".join(lines[:index_line]), [
+        {"type": "index", "text": removed_text}
+    ]
 
 
 def _remove_publisher_ads(text):
@@ -343,7 +383,14 @@ def _remove_publisher_ads(text):
         r"books by the same author)$",
         re.IGNORECASE,
     )
-    ad_line = next((index for index in range(start, len(lines)) if heading.match(lines[index].strip())), None)
+    ad_line = next(
+        (
+            index
+            for index in range(start, len(lines))
+            if heading.match(lines[index].strip())
+        ),
+        None,
+    )
     if ad_line is None:
         return text, []
     section = "\n".join(lines[ad_line:])
@@ -354,7 +401,9 @@ def _remove_publisher_ads(text):
     )
     if len(sales_terms) < 2:
         return text, []
-    return "\n".join(lines[:ad_line]), [{"type": "publisher_advertisements", "text": section}]
+    return "\n".join(lines[:ad_line]), [
+        {"type": "publisher_advertisements", "text": section}
+    ]
 
 
 def _remove_transcriber_log(text):
@@ -362,25 +411,51 @@ def _remove_transcriber_log(text):
     lines = text.split("\n")
     start = max(0, len(lines) * 4 // 5)
     heading = re.compile(r"^transcriber(?:'s|s')? notes?:?$", re.IGNORECASE)
-    note_line = next((index for index in range(start, len(lines)) if heading.match(lines[index].strip())), None)
+    note_line = next(
+        (
+            index
+            for index in range(start, len(lines))
+            if heading.match(lines[index].strip())
+        ),
+        None,
+    )
     if note_line is None:
         return text, []
     section = "\n".join(lines[note_line:])
     lower = section.lower()
-    symbol_terms = ("symbol", "denotes", "represents", "italic", "bold", "superscript", "small caps", "greek")
+    symbol_terms = (
+        "symbol",
+        "denotes",
+        "represents",
+        "italic",
+        "bold",
+        "superscript",
+        "small caps",
+        "greek",
+    )
     if any(term in lower for term in symbol_terms):
         return text, []
-    production_terms = ("typographical", "punctuation", "spelling", "corrected", "changed from", "printer's error")
+    production_terms = (
+        "typographical",
+        "punctuation",
+        "spelling",
+        "corrected",
+        "changed from",
+        "printer's error",
+    )
     if not any(term in lower for term in production_terms):
         return text, []
-    return "\n".join(lines[:note_line]), [{"type": "transcriber_correction_log", "text": section}]
+    return "\n".join(lines[:note_line]), [
+        {"type": "transcriber_correction_log", "text": section}
+    ]
 
 
 def _remove_layout_artifacts(text):
     """Remove image placeholders and confident page artifacts."""
     lines = text.split("\n")
     remove = {
-        index for index, line in enumerate(lines)
+        index
+        for index, line in enumerate(lines)
         if _BARE_IMAGE.match(line) or _DECORATED_PAGE.match(line)
     }
 
@@ -394,22 +469,40 @@ def _remove_layout_artifacts(text):
 
     neighbor_values = []
     page_indexes = {
-        index for index in remove
-        if index < len(lines) and (_DECORATED_PAGE.match(lines[index]) or _BARE_PAGE.match(lines[index]))
+        index
+        for index in remove
+        if index < len(lines)
+        and (
+            _DECORATED_PAGE.match(lines[index])
+            or _BARE_PAGE.match(lines[index])
+        )
     }
     for page_index in page_indexes:
-        for neighbor in (page_index - 2, page_index - 1, page_index + 1, page_index + 2):
+        for neighbor in (
+            page_index - 2,
+            page_index - 1,
+            page_index + 1,
+            page_index + 2,
+        ):
             if 0 <= neighbor < len(lines):
                 value = re.sub(r"\s+", " ", lines[neighbor].strip()).casefold()
                 if 2 < len(value) <= 80 and not _SECTION_HEADING.match(value):
                     neighbor_values.append(value)
-    repeated = {value for value, count in Counter(neighbor_values).items() if count >= 3}
+    repeated = {
+        value
+        for value, count in Counter(neighbor_values).items()
+        if count >= 3
+    }
     for index, line in enumerate(lines):
         value = re.sub(r"\s+", " ", line.strip()).casefold()
-        if value in repeated and any(abs(index - page) <= 2 for page in page_indexes):
+        if value in repeated and any(
+            abs(index - page) <= 2 for page in page_indexes
+        ):
             remove.add(index)
 
-    return "\n".join(line for index, line in enumerate(lines) if index not in remove)
+    return "\n".join(
+        line for index, line in enumerate(lines) if index not in remove
+    )
 
 
 def _is_page_sequence(pages):
@@ -423,7 +516,8 @@ def _is_page_sequence(pages):
     differences = [right - left for left, right in zip(values, values[1:])]
     return (
         all(value > 0 for value in differences)
-        and sum(value == 1 for value in differences) * 4 >= len(differences) * 3
+        and sum(value == 1 for value in differences) * 4
+        >= len(differences) * 3
     )
 
 
@@ -485,8 +579,16 @@ def _reflow_block(block):
         return block
     if any(line.rstrip().endswith("-") for line in nonempty[:-1]):
         return block
-    if sum(line.lstrip().startswith(('"', "'", "—", "–")) for line in nonempty) > 1:
+    if (
+        sum(
+            line.lstrip().startswith(('"', "'", "—", "–")) for line in nonempty
+        )
+        > 1
+    ):
         return block
-    if sum(len(line.rstrip()) >= 45 for line in nonempty[:-1]) * 4 < (len(nonempty) - 1) * 3:
+    if (
+        sum(len(line.rstrip()) >= 45 for line in nonempty[:-1]) * 4
+        < (len(nonempty) - 1) * 3
+    ):
         return block
     return " ".join(line.strip() for line in nonempty)

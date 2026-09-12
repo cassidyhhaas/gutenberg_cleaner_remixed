@@ -11,8 +11,13 @@ _START_MARKERS = (
         re.IGNORECASE,
     ),
     re.compile(r"^\s*\*?END\*?\s*THE\s+SMALL\s+PRINT!?\s*$", re.IGNORECASE),
-    re.compile(r"^\s*BEGINNING\s+OF\s+(?:THE|THIS)\s+PROJECT\s+GUTENBERG\b", re.IGNORECASE),
-    re.compile(r"^\s*\*{3,}\s*START\s+OF\s+THE\s+COPYRIGHTED\b", re.IGNORECASE),
+    re.compile(
+        r"^\s*BEGINNING\s+OF\s+(?:THE|THIS)\s+PROJECT\s+GUTENBERG\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^\s*\*{3,}\s*START\s+OF\s+THE\s+COPYRIGHTED\b", re.IGNORECASE
+    ),
 )
 _END_MARKERS = (
     re.compile(
@@ -20,9 +25,14 @@ _END_MARKERS = (
         r"(?:\s+(?:EBOOK|ETEXT))?\b",
         re.IGNORECASE,
     ),
-    re.compile(r"^\s*END\s+OF\s+(?:(?:THE|THIS)\s+)?PROJECT\s+GUTENBERG\b", re.IGNORECASE),
+    re.compile(
+        r"^\s*END\s+OF\s+(?:(?:THE|THIS)\s+)?PROJECT\s+GUTENBERG\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"^\s*FIN\s+DE\s+PROJECT\s+GUTENBERG\b", re.IGNORECASE),
-    re.compile(r"^\s*ENDE\s+DIESES?\s+PROJE(?:C|K)T\s+GUTENBERG\b", re.IGNORECASE),
+    re.compile(
+        r"^\s*ENDE\s+DIESES?\s+PROJE(?:C|K)T\s+GUTENBERG\b", re.IGNORECASE
+    ),
     re.compile(r"^\s*\*{3,}\s*END\s+OF\s+THE\s+COPYRIGHTED\b", re.IGNORECASE),
 )
 
@@ -60,8 +70,8 @@ def _split_headers(text: str) -> BoundaryResult:
         return BoundaryResult(text, "", "", "unresolved", start_line, end_line)
 
     return BoundaryResult(
-        text="\n".join(lines[start_line + 1:end_line]),
-        removed_prefix="\n".join(lines[:start_line + 1]),
+        text="\n".join(lines[start_line + 1 : end_line]),
+        removed_prefix="\n".join(lines[: start_line + 1]),
         removed_suffix="\n".join(lines[end_line:]),
         boundary_status="resolved",
         start_line=start_line,

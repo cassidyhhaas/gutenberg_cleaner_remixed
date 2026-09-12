@@ -76,6 +76,24 @@ The metadata includes these fields:
 python -B -m unittest discover -v
 ```
 
+## Lint
+
+Install pre-commit and enable the repository hook.
+
+```console
+python -m pip install pre-commit
+pre-commit install
+```
+
+Run all lint checks before the first commit.
+
+```console
+pre-commit run --all-files
+```
+
+Ruff enforces pycodestyle errors, warnings, Python errors, and PEP 8 names. It
+uses a 79-character line limit.
+
 ## License
 
 This project uses the MIT License. See [LICENSE.md](LICENSE.md).
