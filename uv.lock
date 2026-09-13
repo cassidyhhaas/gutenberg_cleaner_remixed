@@ -39,9 +39,9 @@ wheels = [
 ]
 
 [[package]]
-name = "gutenberg-cleaner-remix"
+name = "gutenberg-cleaner-remixed"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 
 [package.dev-dependencies]
 dev = [

@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from gutenberg_cleaner import (
+from gutenberg_cleaner_remixed import (
     CLEANER_VERSION,
     UnresolvedBoundaryError,
     clean_book,
