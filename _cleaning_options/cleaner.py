@@ -9,7 +9,7 @@ from typing import Dict, List, NamedTuple, Union
 from .strip_headers import UnresolvedBoundaryError, _split_headers
 
 
-CLEANER_VERSION = "0.2.0"
+CLEANER_VERSION = "0.1.0"
 
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 _ZERO_WIDTH_CHARACTERS = re.compile(r"[\u200b-\u200f\u2060\ufeff]")
