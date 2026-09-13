@@ -22,6 +22,7 @@ dev = [
     "ruff",
     "pytest",
     "pre-commit",
+    "mypy"
 ]
 
 [tool.ruff]
@@ -31,5 +32,9 @@ target-version = "py39"
 [tool.ruff.lint]
 select = ["E", "F", "N", "W"]
 
-[tool.uv.sources]
-gutenberg-cleaner-remixed = { workspace = true }
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true

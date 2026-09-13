@@ -1,7 +1,11 @@
 """Find and remove Project Gutenberg boundary sections."""
 
 import re
-from typing import NamedTuple, Optional
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Literal, NamedTuple
+
+
+BoundaryStatus = Literal["resolved", "unresolved"]
 
 
 _START_MARKERS = (
@@ -43,17 +47,24 @@ class BoundaryResult(NamedTuple):
     text: str
     removed_prefix: str
     removed_suffix: str
-    boundary_status: str
-    start_line: Optional[int]
-    end_line: Optional[int]
+    boundary_status: BoundaryStatus
+    start_line: int | None
+    end_line: int | None
 
 
 class UnresolvedBoundaryError(ValueError):
     """Report a file that does not contain both Gutenberg markers."""
 
-    def __init__(self, missing_markers, metadata=None):
+    missing_markers: tuple[str, ...]
+    metadata: Mapping[str, object]
+
+    def __init__(
+        self,
+        missing_markers: Iterable[str],
+        metadata: Mapping[str, object] | None = None,
+    ) -> None:
         self.missing_markers = tuple(missing_markers)
-        self.metadata = metadata or {}
+        self.metadata = metadata if metadata is not None else {}
         markers = " and ".join(self.missing_markers)
         label = "marker" if len(self.missing_markers) == 1 else "markers"
         message = "The cleaner cannot resolve the Gutenberg boundary."
@@ -92,7 +103,7 @@ def _strip_headers(text: str) -> str:
     return result.text
 
 
-def _find_start_marker(lines):
+def _find_start_marker(lines: Sequence[str]) -> int | None:
     """Find a start marker in the first 600 lines."""
     for line_number, line in enumerate(lines[:600]):
         if any(marker.match(line) for marker in _START_MARKERS):
@@ -100,7 +111,9 @@ def _find_start_marker(lines):
     return None
 
 
-def _find_end_marker(lines, start_line):
+def _find_end_marker(
+    lines: Sequence[str], start_line: int | None
+) -> int | None:
     """Find an end marker in the last part of the file."""
     search_size = max(600, (len(lines) + 4) // 5)
     search_start = max(0, len(lines) - search_size)

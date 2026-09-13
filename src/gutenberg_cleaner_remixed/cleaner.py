@@ -4,9 +4,14 @@ import hashlib
 import re
 import unicodedata
 from collections import Counter
-from typing import Dict, List, NamedTuple, Union
+from typing import NamedTuple, NotRequired, Pattern, TypeAlias, TypedDict
 
-from .strip_headers import UnresolvedBoundaryError, _split_headers
+from .strip_headers import (
+    BoundaryResult,
+    BoundaryStatus,
+    UnresolvedBoundaryError,
+    _split_headers,
+)
 
 
 CLEANER_VERSION = "0.1.0"
@@ -38,17 +43,44 @@ _SOURCE_URL = re.compile(
 )
 
 
+class RemovedSection(TypedDict):
+    """Describe one section that the cleaner removed."""
+
+    type: str
+    text: str
+
+
+class Metadata(TypedDict):
+    """Describe metadata that the cleaner extracts or creates."""
+
+    gutenberg_id: str | None
+    title: str | None
+    authors: list[str]
+    language: str | None
+    source: str
+    source_url: str | None
+    rights_statement: str | None
+    raw_sha256: str
+    cleaner_version: str
+    boundary_status: BoundaryStatus
+    removed_sections: NotRequired[list[str]]
+    production_credits: NotRequired[list[str]]
+
+
+RemovalResult: TypeAlias = tuple[str, list[RemovedSection]]
+
+
 class CleaningResult(NamedTuple):
     """Contain cleaned text, metadata, and removed audit text."""
 
     text: str
-    metadata: Dict[str, object]
+    metadata: Metadata
     removed_prefix: str
     removed_suffix: str
-    removed_sections: List[Dict[str, str]]
+    removed_sections: list[RemovedSection]
 
 
-def simple_cleaner(book: Union[str, bytes]) -> str:
+def simple_cleaner(book: str | bytes) -> str:
     """Normalize text and remove Gutenberg boundary sections."""
     text, raw_bytes = _decode_book(book)
     del raw_bytes
@@ -58,7 +90,7 @@ def simple_cleaner(book: Union[str, bytes]) -> str:
     return _normalize_spacing(boundary.text)
 
 
-def clean_book(book: Union[str, bytes]) -> CleaningResult:
+def clean_book(book: str | bytes) -> CleaningResult:
     """Clean one book and return its metadata and audit text."""
     text, raw_bytes = _decode_book(book)
     normalized = _normalize_text(text)
@@ -81,7 +113,7 @@ def clean_book(book: Union[str, bytes]) -> CleaningResult:
     )
 
     if boundary.boundary_status == "unresolved":
-        missing = []
+        missing: list[str] = []
         if boundary.start_line is None:
             missing.append("start")
         if boundary.end_line is None:
@@ -89,7 +121,7 @@ def clean_book(book: Union[str, bytes]) -> CleaningResult:
         raise UnresolvedBoundaryError(missing, metadata)
 
     body = boundary.text
-    removed_sections = []
+    removed_sections: list[RemovedSection] = []
     body, removed = _remove_production_credits(body)
     removed_sections.extend(removed)
     body, removed = _remove_duplicate_contents(body)
@@ -126,12 +158,12 @@ def clean_book(book: Union[str, bytes]) -> CleaningResult:
     )
 
 
-def super_cleaner(book: Union[str, bytes]) -> str:
+def super_cleaner(book: str | bytes) -> str:
     """Clean a book without deleting valid content classes."""
     return clean_book(book).text
 
 
-def _decode_book(book):
+def _decode_book(book: str | bytes) -> tuple[str, bytes]:
     """Decode bytes as UTF-8 without replacement characters."""
     if isinstance(book, bytes):
         return book.decode("utf-8", errors="strict"), book
@@ -140,7 +172,7 @@ def _decode_book(book):
     return book, book.encode("utf-8")
 
 
-def _normalize_text(text):
+def _normalize_text(text: str) -> str:
     """Apply safe character and line-ending normalization."""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = unicodedata.normalize("NFC", text)
@@ -149,10 +181,10 @@ def _normalize_text(text):
     return _CONTROL_CHARACTERS.sub("", text)
 
 
-def _normalize_spacing(text):
+def _normalize_spacing(text: str) -> str:
     """Remove trailing space and limit blank-line runs."""
     lines = [line.rstrip(" \t") for line in text.split("\n")]
-    output = []
+    output: list[str] = []
     blank_count = 0
     for line in lines:
         if line:
@@ -165,11 +197,11 @@ def _normalize_spacing(text):
     return "\n".join(output).strip()
 
 
-def _require_boundaries(boundary):
+def _require_boundaries(boundary: BoundaryResult) -> None:
     """Raise an error when a marker is missing."""
     if boundary.boundary_status == "resolved":
         return
-    missing = []
+    missing: list[str] = []
     if boundary.start_line is None:
         missing.append("start")
     if boundary.end_line is None:
@@ -177,7 +209,12 @@ def _require_boundaries(boundary):
     raise UnresolvedBoundaryError(missing)
 
 
-def _extract_metadata(prefix, suffix, raw_sha256, boundary_status):
+def _extract_metadata(
+    prefix: str,
+    suffix: str,
+    raw_sha256: str,
+    boundary_status: BoundaryStatus,
+) -> Metadata:
     """Extract stable metadata before boilerplate removal."""
     metadata_text = prefix + "\n" + suffix
     title = _first_field(prefix, "title")
@@ -206,7 +243,7 @@ def _extract_metadata(prefix, suffix, raw_sha256, boundary_status):
     }
 
 
-def _first_field(text, field):
+def _first_field(text: str, field: str) -> str | None:
     """Return the first Gutenberg metadata field."""
     pattern = re.compile(
         r"^" + re.escape(field) + r":\s*(.+?)\s*$",
@@ -216,7 +253,7 @@ def _first_field(text, field):
     return match.group(1).strip() if match else None
 
 
-def _all_fields(text, field):
+def _all_fields(text: str, field: str) -> list[str]:
     """Return all Gutenberg metadata fields with one name."""
     pattern = re.compile(
         r"^" + re.escape(field) + r":\s*(.+?)\s*$",
@@ -225,7 +262,7 @@ def _all_fields(text, field):
     return [match.strip() for match in pattern.findall(text)]
 
 
-def _first_match(pattern, text):
+def _first_match(pattern: Pattern[str], text: str) -> str | None:
     """Return the first capture or full regular expression match."""
     match = pattern.search(text)
     if not match:
@@ -233,7 +270,7 @@ def _first_match(pattern, text):
     return match.group(1) if match.lastindex else match.group(0)
 
 
-def _extract_rights_statement(text):
+def _extract_rights_statement(text: str) -> str | None:
     """Return the most specific rights line."""
     field = _first_field(text, "copyright status") or _first_field(
         text, "rights"
@@ -250,11 +287,11 @@ def _extract_rights_statement(text):
     return None
 
 
-def _remove_production_credits(text):
+def _remove_production_credits(text: str) -> RemovalResult:
     """Remove explicit production credits near the book start."""
     parts = re.split(r"(\n{2,})", text)
-    output = []
-    removed = []
+    output: list[str] = []
+    removed: list[RemovedSection] = []
     consumed_lines = 0
     for part_number in range(0, len(parts), 2):
         block = parts[part_number]
@@ -278,7 +315,7 @@ def _remove_production_credits(text):
     return "".join(output), removed
 
 
-def _remove_duplicate_contents(text):
+def _remove_duplicate_contents(text: str) -> RemovalResult:
     """Remove a contents section only when later headings duplicate it."""
     lines = text.split("\n")
     search_limit = min(len(lines), max(400, len(lines) // 4))
@@ -295,7 +332,7 @@ def _remove_duplicate_contents(text):
 
     keys = [_heading_key(line) for line in lines]
     candidate_limit = min(len(lines), contents_line + 300)
-    pairs = []
+    pairs: list[tuple[int, int, str]] = []
     first_body_line = len(lines)
     for index in range(contents_line + 1, candidate_limit):
         if index >= first_body_line:
@@ -322,14 +359,14 @@ def _remove_duplicate_contents(text):
     ]
 
 
-def _heading_key(line):
+def _heading_key(line: str) -> str:
     """Normalize a possible heading for exact duplicate checks."""
     value = re.sub(r"\s+", " ", line.strip()).casefold()
     value = re.sub(r"\.{2,}\s*\d+\s*$", "", value).strip(" .")
     return value
 
 
-def _is_heading_key(value):
+def _is_heading_key(value: str) -> bool:
     """Identify a short line that can be a structural heading."""
     if not value or len(value) > 100 or len(value.split()) > 12:
         return False
@@ -338,7 +375,7 @@ def _is_heading_key(value):
     return bool(_SECTION_HEADING.match(value)) or not value.endswith(".")
 
 
-def _remove_terminal_index(text):
+def _remove_terminal_index(text: str) -> RemovalResult:
     """Remove a final index only when entries contain page references."""
     lines = text.split("\n")
     start = max(0, len(lines) * 3 // 4)
@@ -369,7 +406,7 @@ def _remove_terminal_index(text):
     ]
 
 
-def _remove_publisher_ads(text):
+def _remove_publisher_ads(text: str) -> RemovalResult:
     """Remove a final publisher section only when sales terms occur."""
     lines = text.split("\n")
     start = max(0, len(lines) * 4 // 5)
@@ -401,7 +438,7 @@ def _remove_publisher_ads(text):
     ]
 
 
-def _remove_transcriber_log(text):
+def _remove_transcriber_log(text: str) -> RemovalResult:
     """Remove a final correction log but keep symbol guidance."""
     lines = text.split("\n")
     start = max(0, len(lines) * 4 // 5)
@@ -445,7 +482,7 @@ def _remove_transcriber_log(text):
     ]
 
 
-def _remove_layout_artifacts(text):
+def _remove_layout_artifacts(text: str) -> str:
     """Remove image placeholders and confident page artifacts."""
     lines = text.split("\n")
     remove = {
@@ -454,7 +491,7 @@ def _remove_layout_artifacts(text):
         if _BARE_IMAGE.match(line) or _DECORATED_PAGE.match(line)
     }
 
-    bare_pages = []
+    bare_pages: list[tuple[int, int]] = []
     for index, line in enumerate(lines):
         match = _BARE_PAGE.match(line)
         if match:
@@ -462,7 +499,7 @@ def _remove_layout_artifacts(text):
     if _is_page_sequence(bare_pages):
         remove.update(index for index, value in bare_pages)
 
-    neighbor_values = []
+    neighbor_values: list[str] = []
     page_indexes = {
         index
         for index in remove
@@ -500,7 +537,7 @@ def _remove_layout_artifacts(text):
     )
 
 
-def _is_page_sequence(pages):
+def _is_page_sequence(pages: list[tuple[int, int]]) -> bool:
     """Identify dispersed and increasing bare page numbers."""
     if len(pages) < 4:
         return False
@@ -516,15 +553,15 @@ def _is_page_sequence(pages):
     )
 
 
-def _ensure_title_heading(text, metadata):
+def _ensure_title_heading(text: str, metadata: Metadata) -> str:
     """Keep one exact title and author heading near the book start."""
-    title = metadata.get("title")
-    authors = list(metadata.get("authors") or [])
+    title = metadata["title"]
+    authors = metadata["authors"]
     if not title and not authors:
         return text
 
     lines = text.split("\n")
-    output = []
+    output: list[str] = []
     title_key = _line_key(title) if title else None
     author_keys = {_line_key(author) for author in authors}
     for index, line in enumerate(lines):
@@ -537,7 +574,7 @@ def _ensure_title_heading(text, metadata):
                 continue
         output.append(line)
 
-    heading = []
+    heading: list[str] = []
     if title:
         heading.append(title)
     if authors:
@@ -545,12 +582,12 @@ def _ensure_title_heading(text, metadata):
     return "\n\n".join(("\n".join(heading), "\n".join(output).lstrip("\n")))
 
 
-def _line_key(value):
+def _line_key(value: str) -> str:
     """Normalize one line for exact title-page comparisons."""
     return re.sub(r"\s+", " ", value.strip()).casefold()
 
 
-def _reflow_prose(text):
+def _reflow_prose(text: str) -> str:
     """Reflow fixed-width prose and preserve structured text."""
     parts = re.split(r"(\n{2,})", text)
     return "".join(
@@ -559,7 +596,7 @@ def _reflow_prose(text):
     )
 
 
-def _reflow_block(block):
+def _reflow_block(block: str) -> str:
     """Reflow one block only when its layout is prose."""
     lines = block.split("\n")
     nonempty = [line for line in lines if line]
