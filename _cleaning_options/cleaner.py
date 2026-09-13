@@ -126,13 +126,8 @@ def clean_book(book: Union[str, bytes]) -> CleaningResult:
     )
 
 
-def super_cleaner(
-    book: Union[str, bytes],
-    min_token: int = 5,
-    max_token: int = 600,
-) -> str:
+def super_cleaner(book: Union[str, bytes]) -> str:
     """Clean a book without deleting valid content classes."""
-    del min_token, max_token
     return clean_book(book).text
 
 

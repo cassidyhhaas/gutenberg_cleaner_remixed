@@ -10,11 +10,8 @@ _BARE_IMAGE = re.compile(
 )
 
 
-def _is_title_or_etc(
-    text: str, min_token: int = 5, max_token: int = 600
-) -> bool:
+def _is_title_or_etc(text: str) -> bool:
     """Identify an empty paragraph without classifying valid short text."""
-    del min_token, max_token
     return not text.strip()
 
 

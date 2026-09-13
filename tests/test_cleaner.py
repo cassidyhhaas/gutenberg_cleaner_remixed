@@ -1,7 +1,8 @@
 """Test conservative Gutenberg cleaning behavior."""
 
 import hashlib
-import unittest
+
+import pytest
 
 from gutenberg_cleaner import (
     CLEANER_VERSION,
@@ -21,13 +22,13 @@ def make_book(body, prefix="", suffix=""):
     return "\n".join((prefix, START, body, END, suffix))
 
 
-class BoundaryTests(unittest.TestCase):
+class TestBoundaries:
     """Test strict Gutenberg boundary handling."""
 
     def test_removes_prefix_marker_suffix_and_marker(self):
         book = make_book("Title\n\nBody", "Header", "License")
 
-        self.assertEqual(simple_cleaner(book), "Title\n\nBody")
+        assert simple_cleaner(book) == "Title\n\nBody"
 
     def test_accepts_this_project_and_old_spacing(self):
         book = "\n".join(
@@ -40,7 +41,7 @@ class BoundaryTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(super_cleaner(book), "Body")
+        assert super_cleaner(book) == "Body"
 
     def test_accepts_constrained_older_markers(self):
         book = "\n".join(
@@ -53,36 +54,34 @@ class BoundaryTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(super_cleaner(book), "Body")
+        assert super_cleaner(book) == "Body"
 
     def test_rejects_an_unresolved_boundary(self):
-        with self.assertRaises(UnresolvedBoundaryError) as context:
+        with pytest.raises(UnresolvedBoundaryError) as context:
             clean_book("Header\nBody without official markers")
 
-        self.assertEqual(context.exception.missing_markers, ("start", "end"))
-        self.assertEqual(
-            context.exception.metadata["boundary_status"], "unresolved"
-        )
+        assert context.value.missing_markers == ("start", "end")
+        assert context.value.metadata["boundary_status"] == "unresolved"
 
     def test_extracts_metadata_for_an_unresolved_boundary(self):
         book = "Title: Test Book\nRelease Date: Today [EBook #123]\nBody"
 
-        with self.assertRaises(UnresolvedBoundaryError) as context:
+        with pytest.raises(UnresolvedBoundaryError) as context:
             clean_book(book)
 
-        self.assertEqual(context.exception.metadata["title"], "Test Book")
-        self.assertEqual(context.exception.metadata["gutenberg_id"], "123")
+        assert context.value.metadata["title"] == "Test Book"
+        assert context.value.metadata["gutenberg_id"] == "123"
 
     def test_ignores_start_marker_after_line_600(self):
         book = "\n".join(["Header"] * 600 + [START, "Body", END])
 
-        with self.assertRaises(UnresolvedBoundaryError) as context:
+        with pytest.raises(UnresolvedBoundaryError) as context:
             super_cleaner(book)
 
-        self.assertIn("start", context.exception.missing_markers)
+        assert "start" in context.value.missing_markers
 
 
-class NormalizationTests(unittest.TestCase):
+class TestNormalization:
     """Test safe text normalization."""
 
     def test_normalizes_characters_lines_and_blank_runs(self):
@@ -94,10 +93,10 @@ class NormalizationTests(unittest.TestCase):
 
         cleaned = super_cleaner(book)
 
-        self.assertEqual(cleaned, "Café\nsofthyphen\ntext\n\n\nEnd")
+        assert cleaned == "Café\nsofthyphen\ntext\n\n\nEnd"
 
     def test_rejects_invalid_utf8(self):
-        with self.assertRaises(UnicodeDecodeError):
+        with pytest.raises(UnicodeDecodeError):
             super_cleaner(
                 b"\xff" + START.encode() + b"\nBody\n" + END.encode()
             )
@@ -117,12 +116,12 @@ class NormalizationTests(unittest.TestCase):
 
         cleaned = super_cleaner(make_book("\n\n".join((prose, verse, table))))
 
-        self.assertIn("reflow. The next", cleaned)
-        self.assertIn(verse, cleaned)
-        self.assertIn(table, cleaned)
+        assert "reflow. The next" in cleaned
+        assert verse in cleaned
+        assert table in cleaned
 
 
-class PreservationTests(unittest.TestCase):
+class TestPreservation:
     """Test the content classes that the cleaner must preserve."""
 
     def test_preserves_book_content_classes(self):
@@ -143,8 +142,8 @@ class PreservationTests(unittest.TestCase):
         cleaned = super_cleaner(make_book(content))
 
         for paragraph in content.split("\n\n"):
-            self.assertIn(paragraph, cleaned)
-        self.assertNotIn("[deleted]", cleaned)
+            assert paragraph in cleaned
+        assert "[deleted]" not in cleaned
 
     def test_removes_only_bare_image_placeholders(self):
         body = (
@@ -154,16 +153,15 @@ class PreservationTests(unittest.TestCase):
 
         cleaned = super_cleaner(make_book(body))
 
-        self.assertNotIn("image023.jpg", cleaned)
-        self.assertIn("A map of London in 1720.", cleaned)
+        assert "image023.jpg" not in cleaned
+        assert "A map of London in 1720." in cleaned
 
-    def test_ignores_legacy_token_limits(self):
-        body = "A valid short line.\n\n" + "word " * 700
+    @pytest.mark.parametrize("argument", ["min_token", "max_token"])
+    def test_rejects_legacy_token_limits(self, argument):
+        book = make_book("Body")
 
-        cleaned = super_cleaner(make_book(body), min_token=100, max_token=2)
-
-        self.assertIn("A valid short line.", cleaned)
-        self.assertGreater(len(cleaned.split()), 700)
+        with pytest.raises(TypeError, match=argument):
+            super_cleaner(book, **{argument: 1})
 
     def test_keeps_symbol_guidance_and_removes_correction_log(self):
         filler = "\n".join("Story line " + str(index) for index in range(30))
@@ -175,11 +173,11 @@ class PreservationTests(unittest.TestCase):
         cleaned_log = super_cleaner(make_book(filler + "\n" + correction_log))
         cleaned_symbols = super_cleaner(make_book(filler + "\n" + symbol_note))
 
-        self.assertNotIn("typographical", cleaned_log)
-        self.assertIn("asterisk represents italic text", cleaned_symbols)
+        assert "typographical" not in cleaned_log
+        assert "asterisk represents italic text" in cleaned_symbols
 
 
-class RemovalAndMetadataTests(unittest.TestCase):
+class TestRemovalAndMetadata:
     """Test duplicate sections, metadata, and audit output."""
 
     def test_removes_a_contents_section_only_when_headings_repeat(self):
@@ -205,11 +203,9 @@ class RemovalAndMetadataTests(unittest.TestCase):
 
         result = clean_book(make_book(body))
 
-        self.assertEqual(result.text.count("CHAPTER I\n"), 1)
-        self.assertNotIn("CONTENTS", result.text)
-        self.assertEqual(
-            result.removed_sections[0]["type"], "table_of_contents"
-        )
+        assert result.text.count("CHAPTER I\n") == 1
+        assert "CONTENTS" not in result.text
+        assert result.removed_sections[0]["type"] == "table_of_contents"
 
     def test_keeps_a_contents_heading_without_duplicate_evidence(self):
         body = (
@@ -217,7 +213,7 @@ class RemovalAndMetadataTests(unittest.TestCase):
             "Entries follow alphabetically."
         )
 
-        self.assertIn("CONTENTS", super_cleaner(make_book(body)))
+        assert "CONTENTS" in super_cleaner(make_book(body))
 
     def test_extracts_metadata_before_removal(self):
         prefix = "\n".join(
@@ -233,23 +229,22 @@ class RemovalAndMetadataTests(unittest.TestCase):
 
         result = clean_book(book)
 
-        self.assertEqual(result.metadata["gutenberg_id"], "123")
-        self.assertEqual(result.metadata["title"], "Test Book")
-        self.assertEqual(result.metadata["authors"], ["Jane Doe"])
-        self.assertEqual(result.metadata["language"], "English")
-        self.assertEqual(
-            result.metadata["source_url"],
-            "https://www.gutenberg.org/ebooks/123",
+        assert result.metadata["gutenberg_id"] == "123"
+        assert result.metadata["title"] == "Test Book"
+        assert result.metadata["authors"] == ["Jane Doe"]
+        assert result.metadata["language"] == "English"
+        assert result.metadata["source_url"] == (
+            "https://www.gutenberg.org/ebooks/123"
         )
-        self.assertEqual(result.metadata["cleaner_version"], CLEANER_VERSION)
-        self.assertEqual(
-            result.metadata["raw_sha256"],
-            hashlib.sha256(book.encode()).hexdigest(),
+        assert result.metadata["cleaner_version"] == CLEANER_VERSION
+        assert (
+            result.metadata["raw_sha256"]
+            == hashlib.sha256(book.encode()).hexdigest()
         )
-        self.assertIn("Title: Test Book", result.removed_prefix)
-        self.assertIn("License", result.removed_suffix)
-        self.assertEqual(result.text.count("Test Book"), 1)
-        self.assertTrue(result.text.startswith("Test Book\nBy Jane Doe"))
+        assert "Title: Test Book" in result.removed_prefix
+        assert "License" in result.removed_suffix
+        assert result.text.count("Test Book") == 1
+        assert result.text.startswith("Test Book\nBy Jane Doe")
 
     def test_moves_production_credits_to_audit_output(self):
         body = (
@@ -259,15 +254,12 @@ class RemovalAndMetadataTests(unittest.TestCase):
 
         result = clean_book(make_book(body))
 
-        self.assertNotIn("Produced by", result.text)
-        self.assertEqual(
-            result.removed_sections[0]["type"], "production_credits"
-        )
-        self.assertIn("Produced by", result.removed_sections[0]["text"])
-        self.assertEqual(
-            result.metadata["production_credits"],
-            ["Produced by Jane Doe and Distributed Proofreaders"],
-        )
+        assert "Produced by" not in result.text
+        assert result.removed_sections[0]["type"] == "production_credits"
+        assert "Produced by" in result.removed_sections[0]["text"]
+        assert result.metadata["production_credits"] == [
+            "Produced by Jane Doe and Distributed Proofreaders"
+        ]
 
     def test_adds_missing_title_and_author_headings(self):
         prefix = (
@@ -277,9 +269,7 @@ class RemovalAndMetadataTests(unittest.TestCase):
 
         cleaned = super_cleaner(make_book("CHAPTER I\n\nBody", prefix))
 
-        self.assertTrue(
-            cleaned.startswith("Test Book\nBy Jane Doe\n\nCHAPTER I")
-        )
+        assert cleaned.startswith("Test Book\nBy Jane Doe\n\nCHAPTER I")
 
     def test_removes_a_terminal_page_reference_index(self):
         body = "\n".join(
@@ -296,8 +286,8 @@ class RemovalAndMetadataTests(unittest.TestCase):
 
         result = clean_book(make_book(body))
 
-        self.assertNotIn("INDEX", result.text)
-        self.assertEqual(result.removed_sections[0]["type"], "index")
+        assert "INDEX" not in result.text
+        assert result.removed_sections[0]["type"] == "index"
 
     def test_removes_terminal_publisher_advertisements(self):
         body = "\n".join(
@@ -318,11 +308,7 @@ class RemovalAndMetadataTests(unittest.TestCase):
 
         result = clean_book(make_book(body))
 
-        self.assertNotIn("ADVERTISEMENTS", result.text)
-        self.assertEqual(
-            result.removed_sections[0]["type"], "publisher_advertisements"
+        assert "ADVERTISEMENTS" not in result.text
+        assert result.removed_sections[0]["type"] == (
+            "publisher_advertisements"
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

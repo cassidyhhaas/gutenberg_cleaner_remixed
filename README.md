@@ -17,10 +17,8 @@ The cleaner raises `UnresolvedBoundaryError` when a boundary marker is missing. 
 ## Install
 
 ```console
-pip install .
+uv sync
 ```
-
-The package has no runtime dependencies.
 
 ## Clean text
 
@@ -73,22 +71,18 @@ The metadata includes these fields:
 ## Test
 
 ```console
-python -B -m unittest discover -v
+uv run pytest
 ```
 
 ## Lint
 
-Install pre-commit and enable the repository hook.
+Pre-commit hooks run on git commit and push. The dependencies for pre-commit, ruff, etc resolve in the
+uv environment without needing to install the dependency in your own environment, so run those commands
+with uv.
 
 ```console
-python -m pip install pre-commit
-pre-commit install
-```
-
-Run all lint checks before the first commit.
-
-```console
-pre-commit run --all-files
+uv run git commit -m "Add sample text"
+uv run git push
 ```
 
 Ruff enforces pycodestyle errors, warnings, Python errors, and PEP 8 names. It
